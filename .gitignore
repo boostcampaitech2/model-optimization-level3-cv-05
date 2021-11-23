@@ -1,0 +1,7 @@
+exp/*
+configs/*
+prediction/*
+__pycache__/*
+Dockerfile
+*.ini
+*.csv
