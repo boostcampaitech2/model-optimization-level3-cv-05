@@ -21,6 +21,9 @@ from tqdm import tqdm
 
 from src.utils.torch_utils import save_model
 
+import wandb
+import time
+
 
 def _get_n_data_from_dataloader(dataloader: DataLoader) -> int:
     """Get a number of data in dataloader.
@@ -128,11 +131,13 @@ class TorchTrainer:
         best_test_f1 = -1.0
         num_classes = _get_len_label_from_dataset(train_dataloader.dataset)
         label_list = [i for i in range(num_classes)]
+        
 
         for epoch in range(n_epoch):
             running_loss, correct, total = 0.0, 0, 0
             preds, gt = [], []
             pbar = tqdm(enumerate(train_dataloader), total=len(train_dataloader))
+            b_size = len(train_dataloader)
             self.model.train()
             for batch, (data, labels) in pbar:
                 data, labels = data.to(self.device), labels.to(self.device)
@@ -164,17 +169,50 @@ class TorchTrainer:
 
                 running_loss += loss.item()
                 pbar.update()
+                train_loss = (running_loss / (batch + 1))
+                train_acc = (correct / total) * 100
+                train_f1 = f1_score(y_true=gt, y_pred=preds, labels=label_list, average='macro', zero_division=0)
                 pbar.set_description(
                     f"Train: [{epoch + 1:03d}] "
-                    f"Loss: {(running_loss / (batch + 1)):.3f}, "
-                    f"Acc: {(correct / total) * 100:.2f}% "
-                    f"F1(macro): {f1_score(y_true=gt, y_pred=preds, labels=label_list, average='macro', zero_division=0):.2f}"
+                    f"Loss: {train_loss:.3f}, "
+                    f"Acc: {train_acc:.2f}% "
+                    f"F1(macro): {train_f1:.2f}"
                 )
+                
+                # wandb train log
+                wandb.log({
+                    "train/Loss": train_loss,
+                    "train/Acc": train_acc,
+                    "train/F1(macro)": train_f1,
+                    "learning_rate": self.optimizer.param_groups[0]['lr'],
+                    "epoch": epoch+1
+                    }, step=epoch*b_size+batch)
+                
+                
+                
             pbar.close()
-
-            _, test_f1, test_acc = self.test(
+            
+            ## Validation
+            test_loss, test_f1, test_acc, time_measure_inference = self.test(
                 model=self.model, test_dataloader=val_dataloader
             )
+            #profile_time + val_inferencetime * val_nworkers(5)/infer_nworkers(8) * val_batchsize(64) / infer_batch(1)
+            score_submittime = (30+time_measure_inference*5/8*64/1) 
+            score_f1 = 20*(0.7-test_f1)
+            score_f1 = 1 / (1 +np.exp(-score_f1))
+            score_total = 0.5 * score_submittime + score_f1
+            
+            # wandb test log
+            wandb.log({ 
+                    "val/epoch" : epoch+1,
+                    "val/Loss" : test_loss,
+                    "val/Acc": test_acc,
+                    "val/F1(macro)": test_f1,
+                    # "val/score_f1" : test_f1,
+                    # "val/score_submittime" : score_submittime,
+                    "val/score" : score_total
+                    })
+            
             if best_test_f1 > test_f1:
                 continue
             best_test_acc = test_acc
@@ -187,6 +225,12 @@ class TorchTrainer:
                 data=data,
                 device=self.device,
             )
+            
+            # wandb best test log
+            wandb.log({ "val/best_f1": test_acc,
+                        "val/best_test_acc": test_f1,
+                        "val/best_loss" : test_loss
+                    })
 
         return best_test_acc, best_test_f1
 
@@ -204,7 +248,7 @@ class TorchTrainer:
         """
 
         n_batch = _get_n_batch_from_dataloader(test_dataloader)
-
+        
         running_loss = 0.0
         preds = []
         gt = []
@@ -217,7 +261,14 @@ class TorchTrainer:
         pbar = tqdm(enumerate(test_dataloader), total=len(test_dataloader))
         model.to(self.device)
         model.eval()
+        time_measure_inference = 0
         for batch, (data, labels) in pbar:
+            ###start time record block 
+            t_start = torch.cuda.Event(enable_timing=True)
+            t_end = torch.cuda.Event(enable_timing=True)
+            t_start.record()
+            ###end time record block
+            
             data, labels = data.to(self.device), labels.to(self.device)
 
             if self.scaler:
@@ -226,6 +277,14 @@ class TorchTrainer:
             else:
                 outputs = model(data)
             outputs = torch.squeeze(outputs)
+            
+            ###start time record block
+            t_end.record()
+            torch.cuda.synchronize()
+            t_inference = t_start.elapsed_time(t_end) / 1000
+            time_measure_inference += t_inference
+            ###end time record block
+            
             running_loss += self.criterion(outputs, labels).item()
 
             _, pred = torch.max(outputs, 1)
@@ -245,7 +304,7 @@ class TorchTrainer:
         f1 = f1_score(
             y_true=gt, y_pred=preds, labels=label_list, average="macro", zero_division=0
         )
-        return loss, f1, accuracy
+        return loss, f1, accuracy, time_measure_inference
 
 
 def count_model_params(

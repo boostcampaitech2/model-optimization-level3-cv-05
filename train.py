@@ -20,6 +20,8 @@ from src.trainer import TorchTrainer
 from src.utils.common import get_label_counts, read_yaml
 from src.utils.torch_utils import check_runtime, model_info
 
+import wandb
+
 
 def train(
     model_config: Dict[str, Any],
@@ -29,6 +31,7 @@ def train(
     device: torch.device,
 ) -> Tuple[float, float, float]:
     """Train."""
+    
     # save model_config, data_config
     with open(os.path.join(log_dir, "data.yml"), "w") as f:
         yaml.dump(data_config, f, default_flow_style=False)
@@ -43,6 +46,14 @@ def train(
             torch.load(model_path, map_location=device)
         )
     model_instance.model.to(device)
+    
+    # init wandb
+    NAME= "test"
+    wandb.init(project='Model Optimization', entity='friends', name = NAME)
+    wandb.define_metric("epoch")
+    wandb.define_metric("learning_rate", step_metric="epoch")
+    wandb.define_metric("val/*", step_metric="epoch")
+    wandb.watch(model_instance.model)
 
     # Create dataloader
     train_dl, val_dl, test_dl = create_dataloader(data_config)
@@ -88,7 +99,7 @@ def train(
 
     # evaluate model with test set
     model_instance.model.load_state_dict(torch.load(model_path))
-    test_loss, test_f1, test_acc = trainer.test(
+    test_loss, test_f1, test_acc, _ = trainer.test(
         model=model_instance.model, test_dataloader=val_dl if val_dl else test_dl
     )
     return test_loss, test_f1, test_acc
