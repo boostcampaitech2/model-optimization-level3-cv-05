@@ -226,11 +226,6 @@ class TorchTrainer:
                 device=self.device,
             )
             
-            # wandb best test log
-            wandb.log({ "val/best_f1": test_acc,
-                        "val/best_test_acc": test_f1,
-                        "val/best_loss" : test_loss
-                    })
 
         return best_test_acc, best_test_f1
 
