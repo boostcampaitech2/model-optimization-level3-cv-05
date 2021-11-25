@@ -20,8 +20,9 @@ from src.trainer import TorchTrainer
 from src.utils.common import get_label_counts, read_yaml
 from src.utils.torch_utils import check_runtime, model_info
 
+import numpy as np
+import random
 import wandb
-
 
 def train(
     model_config: Dict[str, Any],
@@ -105,7 +106,20 @@ def train(
     return test_loss, test_f1, test_acc
 
 
+def set_seed(seed) :
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed) # if use multi-GPU
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    random.seed(seed)
+    print(f"seed : {seed}")
+
+
 if __name__ == "__main__":
+    set_seed(42)
     parser = argparse.ArgumentParser(description="Train model.")
     parser.add_argument(
         "--model",
