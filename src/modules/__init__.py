@@ -15,6 +15,7 @@ from src.modules.poolings import (AvgPoolGenerator, GlobalAvgPool,
                                   GlobalAvgPoolGenerator, MaxPoolGenerator)
 from src.modules.vit_mobile import MobileViTBlock, MobileViTBlockGenerator, MV2Block, MV2BlockGenerator
 
+from src.modules.convresidual import ConvResidual, ConvResidualGenerator
 from src.modules.dropout import DropoutGenerator
 
 __all__ = [
@@ -22,6 +23,7 @@ __all__ = [
     "GeneratorAbstract",
     "Bottleneck",
     "Conv",
+    "ConvResidual",
     "DWConv",
     "Linear",
     "GlobalAvgPool",
@@ -31,6 +33,7 @@ __all__ = [
     "BottleneckGenerator",
     "FixedConvGenerator",
     "ConvGenerator",
+    "ConvResidualGenerator",
     "LinearGenerator",
     "DWConvGenerator",
     "FlattenGenerator",
