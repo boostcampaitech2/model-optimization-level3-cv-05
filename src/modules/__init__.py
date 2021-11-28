@@ -15,6 +15,8 @@ from src.modules.poolings import (AvgPoolGenerator, GlobalAvgPool,
                                   GlobalAvgPoolGenerator, MaxPoolGenerator)
 from src.modules.vit_mobile import MobileViTBlock, MobileViTBlockGenerator, MV2Block, MV2BlockGenerator
 
+from src.modules.dropout import DropoutGenerator
+
 __all__ = [
     "ModuleGenerator",
     "GeneratorAbstract",
@@ -41,5 +43,6 @@ __all__ = [
     "MobileViTBlock",
     "MobileViTBlockGenerator",
     "MV2Block",
-    "MV2BlockGenerator"
+    "MV2BlockGenerator",
+    "DropoutGenerator"
 ]
